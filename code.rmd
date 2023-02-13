@@ -1,0 +1,1095 @@
+---
+title: "SG Screener"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+---
+
+<style>
+.navbar {
+  background-color: #C5909F;
+  hover-color:grey;
+  border-colour: #C5909F;
+}
+
+.navbar-inverse .navbar-nav>.active>a {
+  background-color: #D8A6B4;
+}
+
+
+.navbar-nav>.active>a:hover, .navbar-inverse .navbar-nav>.active>a:focus {
+    color: #ffffff;
+    background-color: #D8A6B4;
+}
+
+.navbar-inverse .navbar-nav > li > a:hover,
+.navbar-inverse .navbar-nav > li > a:focus {
+    background-color: #D8A6B4;
+    color: white;
+}
+
+.navbar-inverse {
+  border-color: #D8A6B4;
+}
+
+.section.sidebar {
+  background-color: #F5F5F5;
+}
+
+.irs--shiny .irs-bar {
+  border-top: 1px solid #abdee6;
+  border-bottom: 1px solid #abdee6;
+  background: #abdee6;
+}
+
+.irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single {
+  background-color: #686264;
+}
+
+.value-output {
+  color: white;
+}
+
+.caption {
+  color: white;
+}
+
+.navbar-inverse .navbar-nav>.active>a, .navbar-inverse .navbar-nav>.active>a:hover, .navbar-inverse .navbar-nav>.active>a:focus {
+  background-color: #D8A6B4;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(flextable)
+
+# Libraries
+library(shiny)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(dbplyr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(treemap)
+library(viridisLite)
+library(highcharter)
+library(DT)
+library(shinyWidgets)
+library(magrittr)
+library(dygraphs)
+library(xts) 
+library(ggthemes) 
+
+```
+
+```{r load, include = FALSE}
+# Load rda
+load(file.path("../data", "singapore_fundamental_data.rda"))
+load(file.path("../data", "ctryprem_x2021_07_07.rda"))
+
+# Clean data: Remove country column and round all digits to 2 d.p.
+singapore_earnings_debt <- cbind(singapore_earnings_debt %>% select(-country) %>% select_if(~!is.numeric(.x)), 
+                                 singapore_earnings_debt %>% select_if(is.numeric) %>% round(2))
+
+singapore_industries <- cbind(singapore_industries %>% select(-country) %>% select_if(~!is.numeric(.x)),
+                              singapore_industries %>% select_if(is.numeric) %>% round(2))
+
+singapore_screener <- cbind(singapore_screener %>% select_if(~!is.numeric(.x)),
+                            singapore_screener %>% select_if(is.numeric) %>% round(2))
+
+singapore_cost_capital <- cbind(singapore_cost_capital%>% select_if(~!is.numeric(.x)),
+                                singapore_cost_capital %>% select_if(is.numeric) %>% round(2))
+```
+
+
+# Stock Screener
+
+Sidebar {.sidebar data-width=330}
+-----------------------------------------------------------------------
+
+### Selection Criteria 
+Use the dropdown/slider bars to input filter criteria. Search result will be displayed in the table. 
+
+```{r}
+#stock screener data with industry 
+company_withindustry<- singapore_earnings_debt %>% select(company_name, industry_group)
+singapore_screener_ind<-merge(company_withindustry,singapore_screener, by='company_name')
+industry_list <- sort(unique(singapore_screener_ind$industry_group))
+
+pickerInput('industry', 'Industry:', choices = industry_list, selected = singapore_screener_ind$industry_group, options = list(`actions-box` = TRUE, style="color: white"), multiple = TRUE)
+
+numlist_divyield <- c(round(min(singapore_screener_ind$dividend_yield),2), seq(0.05, (floor(round(max(singapore_screener_ind$dividend_yield),2)/0.05)*0.05), 0.05), round(max(singapore_screener_ind$dividend_yield),2))
+
+sliderTextInput(inputId = 'dividend_yield',
+                label = 'Dividend Yield:',
+                choices = numlist_divyield,
+                selected =c(round(min(singapore_screener_ind$dividend_yield),2),round(max(singapore_screener_ind$dividend_yield),2)),
+                dragRange = TRUE,grid = TRUE)
+
+
+numlist_excessreturn <- c(round(min(singapore_screener_ind$roic_excess_return),2), seq(0.5, (floor(round(max(singapore_screener_ind$roic_excess_return),2)/0.5)*0.5), 0.5), round(max(singapore_screener_ind$roic_excess_return),2))
+
+sliderTextInput(inputId = 'roic_excess_return',
+                label = 'Excess Return:',
+                choices = numlist_excessreturn,
+                selected =c(round(min(singapore_screener_ind$roic_excess_return),2),round(max(singapore_screener_ind$roic_excess_return),2)),
+                dragRange = TRUE,grid = TRUE)
+
+numlist_roic <- c(round(min(singapore_screener_ind$roic),2), seq(0.5, (floor(round(max(singapore_screener_ind$roic),2)/0.5)*0.5), 0.5))
+
+sliderTextInput(inputId = 'roic',
+                label = 'ROIC:',
+                choices = numlist_roic,
+                selected =c(round(min(singapore_screener_ind$roic),2),round(max(singapore_screener_ind$roic),2)),
+                dragRange = TRUE,grid = TRUE)
+
+
+numlist_costcapital <- c(round(min(singapore_screener_ind$cost_capital),2), seq(0.04, (floor(round(max(singapore_screener_ind$cost_capital),2)/0.01)*0.01), 0.01))
+
+sliderTextInput(inputId = 'cost_capital',
+                label = 'Cost of Capital:',
+                choices = numlist_costcapital,
+                selected =c(round(min(singapore_screener_ind$cost_capital),2),round(max(singapore_screener_ind$cost_capital),2)),
+                dragRange = TRUE,grid = TRUE)
+
+numlist_roe <- c(round(min(singapore_screener_ind$roe),2), seq(0, (floor(round(max(singapore_screener_ind$roe),2)/0.5)*0.5), 0.5), round(max(singapore_screener_ind$roe),2))
+
+sliderTextInput(inputId = 'roe',
+                label = 'ROE:',
+                choices = numlist_roe,
+                selected =c(round(min(singapore_screener_ind$roe),2),round(max(singapore_screener_ind$roe),2)),
+                dragRange = TRUE,grid = TRUE)
+
+numlist_costequity <- c(round(min(singapore_screener_ind$cost_equity),2), seq(0.01, (floor(round(max(singapore_screener_ind$cost_equity),2)/0.01)*0.01), 0.01))
+
+sliderTextInput(inputId = 'cost_equity',
+                label = 'Cost of Equity:',
+                choices = numlist_costequity,
+                selected =c(round(min(singapore_screener_ind$cost_equity),2),round(max(singapore_screener_ind$cost_equity),2)),
+                dragRange = TRUE,grid = TRUE)
+
+numlist_spreadoptimal <- c(round(min(singapore_screener_ind$spread_optimal),2), seq(-0.80, (floor(round(max(singapore_screener_ind$spread_optimal),2)/0.05)*0.05), 0.05))
+
+sliderTextInput(inputId = 'spread_optimal',
+                label = 'Optimal Spread:',
+                choices = numlist_spreadoptimal,
+                selected =c(round(min(singapore_screener_ind$spread_optimal),2),round(max(singapore_screener_ind$spread_optimal),2)),
+                dragRange = TRUE,grid = TRUE)
+
+numlist_actdebtcapital <- c(round(min(singapore_screener_ind$actual_debt_capital),2), seq(0.05, (floor(round(max(singapore_screener_ind$actual_debt_capital),2)/0.05)*0.05), 0.05), round(max(singapore_screener_ind$actual_debt_capital),2))
+
+sliderTextInput(inputId = 'actual_debt_capital',
+                label = 'Actual Debt Capital:',
+                choices = numlist_actdebtcapital,
+                selected =c(round(min(singapore_screener_ind$actual_debt_capital),2),round(max(singapore_screener_ind$actual_debt_capital),2)),
+                dragRange = TRUE,grid = TRUE)
+
+numlist_optdebtcapital <- c(round(min(singapore_screener_ind$optimal_debt_capital),2), seq(0.05, (floor(round(max(singapore_screener_ind$optimal_debt_capital),2)/0.05)*0.05), 0.05), round(max(singapore_screener_ind$optimal_debt_capital),2))
+
+sliderTextInput(inputId = 'optimal_debt_capital',
+                label = 'Optimal Debt Capital:',
+                choices = numlist_optdebtcapital,
+                selected =c(round(min(singapore_screener_ind$optimal_debt_capital),2),round(max(singapore_screener_ind$optimal_debt_capital),2)),
+                dragRange = TRUE,grid = TRUE)
+
+```
+
+
+Row
+-----------------------------------------------------------------------
+### Summary 
+```{r}
+
+renderValueBox({
+rowcount <- singapore_screener_ind %>% filter(industry_group %in% input$industry, 
+                                            round(dividend_yield,2) >= input$dividend_yield[1] & round(dividend_yield,2) <=input$dividend_yield[2],
+                                            round(roic_excess_return,2) >= input$roic_excess_return[1] & round(roic_excess_return,2) <=input$roic_excess_return[2],
+                                            round(roic,2) >= input$roic[1] & round(roic,2) <=input$roic[2],
+                                            round(cost_capital,2) >= input$cost_capital[1] & round(cost_capital,2) <=input$cost_capital[2],
+                                            round(roe,2) >= input$roe[1] & round(roe,2) <=input$roe[2],
+                                            round(cost_equity,2) >= input$cost_equity[1] & round(cost_equity,2) <=input$cost_equity[2],
+                                            round(spread_optimal,2) >= input$spread_optimal[1] & round(spread_optimal,2) <=input$spread_optimal[2],
+                                            round(actual_debt_capital,2) >= input$actual_debt_capital[1] & round(actual_debt_capital,2) <=input$actual_debt_capital[2],
+                                            round(optimal_debt_capital,2) >= input$optimal_debt_capital[1] & round(optimal_debt_capital,2) <=input$optimal_debt_capital[2]) %>% nrow()
+
+valueBox(value = rowcount, caption = "Stocks found using the input filter criteria", color='#D8A6B4')
+})
+
+
+```
+
+Row 
+-----------------------------------------------------------------------
+### Stocks Table {data-height=1000}
+
+```{r}
+renderDataTable({
+    my.options <- list(initComplete = JS(
+        "function(settings, json) {",
+        "$(this.api().table().header()).css({'background-color': '#CB9C9C', 
+                                             'color': 'white',
+                                             'font-size': '100%'});",
+        "}"),
+        pageLength = 100,
+        paging = F,
+        info = T, 
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel')
+        )
+    
+    displayDT_stockscreener <- singapore_screener_ind %>% filter(industry_group %in% input$industry, 
+                                            round(dividend_yield,2) >= input$dividend_yield[1] & round(dividend_yield,2) <=input$dividend_yield[2],
+                                            round(roic_excess_return,2) >= input$roic_excess_return[1] & round(roic_excess_return,2) <=input$roic_excess_return[2],
+                                            round(roic,2) >= input$roic[1] & round(roic,2) <=input$roic[2],
+                                            round(cost_capital,2) >= input$cost_capital[1] & round(cost_capital,2) <=input$cost_capital[2],
+                                            round(roe,2) >= input$roe[1] & round(roe,2) <=input$roe[2],
+                                            round(cost_equity,2) >= input$cost_equity[1] & round(cost_equity,2) <=input$cost_equity[2],
+                                            round(spread_optimal,2) >= input$spread_optimal[1] & round(spread_optimal,2) <=input$spread_optimal[2],
+                                            round(actual_debt_capital,2) >= input$actual_debt_capital[1] & round(actual_debt_capital,2) <=input$actual_debt_capital[2],
+                                            round(optimal_debt_capital,2) >= input$optimal_debt_capital[1] & round(optimal_debt_capital,2) <=input$optimal_debt_capital[2])
+  
+  proper_names_ss <- names(displayDT_stockscreener) %>% str_replace_all("_", " ") %>% str_to_title()
+
+  names(displayDT_stockscreener) <- proper_names_ss
+  
+  DT::datatable(displayDT_stockscreener, extensions = 'Buttons', options = my.options)
+})
+```
+
+
+# Capital Structure 
+
+Sidebar {.sidebar data-width=330}
+-----------------------------------------------------------------------
+### Filters
+Use the dropdowns to input filter criteria. Stocks that satisfy the criteria will be displayed in the visualisations. 
+
+```{r}
+industry_list <- sort(unique(singapore_cost_capital$industry_group))
+
+pickerInput('industry_selection', 'Select Industry:', choices = industry_list, selected = singapore_cost_capital$industry_group, options = list(`actions-box` = TRUE, style="color: white"), multiple = TRUE)
+
+actual_debt_rating <- sort(unique(singapore_cost_capital$actual_debt_rating))
+
+pickerInput('actual_debt_rating', 'Select Actual Debt Rating:', choices = actual_debt_rating, selected = singapore_cost_capital$actual_debt_rating, options = list(`actions-box` = TRUE, style="color: white"), multiple = TRUE)
+
+optimal_debt_rating <- sort(unique(singapore_cost_capital$optimal_debt_rating))
+
+pickerInput('optimal_debt_rating', 'Select Optimal Debt Rating:', choices = optimal_debt_rating, selected = singapore_cost_capital$optimal_debt_rating, options = list(`actions-box` = TRUE, style="color: white"), multiple = TRUE)
+
+flag_bankruptcy <- sort(unique(singapore_cost_capital$flag_bankruptcy))
+
+pickerInput('flag_bankruptcy', 'Bankruptcy?', choices = flag_bankruptcy, selected = singapore_cost_capital$flag_bankruptcy, options = list(`actions-box` = TRUE, style="color: white"), multiple = FALSE)
+
+flag_refinanced <- sort(unique(singapore_cost_capital$flag_refinanced))
+
+pickerInput('flag_refinanced', 'Refinanced?', choices = flag_refinanced, selected = singapore_cost_capital$flag_refinanced, options = list(`actions-box` = TRUE, style="color: white"), multiple = FALSE)
+
+rating_firm_type <- sort(unique(singapore_cost_capital$rating_firm_type))
+
+pickerInput('rating_firm_type', 'Rating Firm Type?', choices = rating_firm_type, selected = singapore_cost_capital$rating_firm_type, options = list(`actions-box` = TRUE, style="color: white"), multiple = FALSE)
+```
+
+Row {.tabset data-height=1000}
+-----------------------------------------------------------------------
+### Valuation 
+<div style='display:flex; flex-direction:column; justify-content:space-evenly; align-items:center;'>
+<div>
+```{r}
+singapore_cost_capital$company_name <- as.factor(singapore_cost_capital$company_name)
+
+
+FilteredData <- reactive({
+  req(input$industry_selection,input$actual_debt_rating, input$optimal_debt_rating, input$flag_bankruptcy,input$flag_refinanced,input$rating_firm_type)
+  df1 <- singapore_cost_capital %>% filter(industry_group %in% input$industry_selection, actual_debt_rating %in% input$actual_debt_rating, optimal_debt_rating %in% input$optimal_debt_rating,
+                                           flag_bankruptcy==input$flag_bankruptcy, flag_refinanced==input$flag_refinanced, rating_firm_type==input$rating_firm_type ) 
+    
+  df1
+})
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_equity_value, n=10) %>% 
+    ggplot(aes(x = actual_equity_value , y = reorder(company_name, actual_equity_value), xmin=optimal_equity_value, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Equity Value: </b>", actual_equity_value, "<br>", "<b>Optimal Equity Value: </b>", optimal_equity_value,"<br>"))) + 
+    geom_bar(stat = "identity", fill="#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_equity_value, xmax=optimal_equity_value, xmin=optimal_equity_value, size = 0.5))  + 
+    scale_fill_viridis_c(option = 'magma') + 
+    xlab("Equity Value") + ggtitle("Top 10 Companies by Actual Equity Value") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+})
+
+
+```
+</div>
+
+<div>
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_enterprise_value, n=10) %>% 
+    ggplot(aes(x = actual_enterprise_value , y = reorder(company_name, actual_enterprise_value), xmin=optimal_enterprise_value, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Enterprise Value: </b>", actual_enterprise_value, "<br>", "<b>Optimal Enterprise Value: </b>", optimal_enterprise_value,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_enterprise_value, xmax=optimal_enterprise_value, xmin=optimal_enterprise_value, size = 0.5))  + 
+    xlab("Enterprise Value") + ggtitle("Top 10 Companies by Actual Enterprise Value ") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+</div>
+
+### Market Capitalisation
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = market_capitalization, n=10) %>% 
+    ggplot(aes(x = market_capitalization , y = reorder(company_name, market_capitalization), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Market Capitalisation: </b>", market_capitalization, "<br>"))) + 
+    geom_bar(stat = "identity", fill="#F3CFC6") + 
+    xlab("Market Capitalisation") + ggtitle("Top 10 Companies by Market Capitalisation") + theme_hc() +
+    theme(axis.title.y = element_blank(), legend.position="none")
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+```
+
+### Debt Capital
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_debt_capital, n=10) %>% 
+    ggplot(aes(x = actual_debt_capital , y = reorder(company_name, actual_debt_capital), xmin=optimal_debt_capital, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Debt Capital: </b>", actual_debt_capital, "<br>", "<b>Optimal Debt Capital: </b>", optimal_debt_capital,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_debt_capital, xmax=optimal_debt_capital, xmin=optimal_debt_capital, size = 0.5))  + 
+    xlab("Debt Capital") + ggtitle("Top 10 Companies by Actual Debt Capital") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+})
+
+```
+
+### Debt 
+<div style='display:flex; flex-direction:column; justify-content:space-evenly; align-items:center;'>
+<div>
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_debt, n=10) %>% 
+    ggplot(aes(x = actual_debt , y = reorder(company_name, actual_debt), xmin=optimal_debt, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Debt: </b>", actual_debt, "<br>", "<b>Optimal Debt: </b>", optimal_debt,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_debt, xmax=optimal_debt, xmin=optimal_debt, size = 0.5))  + 
+    xlab("Debt") + ggtitle("Top 10 Companies by Actual Debt ") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+
+```
+</div>
+
+<div>
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = adjusted_debt, n=10) %>% 
+    ggplot(aes(x = adjusted_debt , y = reorder(company_name, adjusted_debt), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Adjusted Debt: </b>", adjusted_debt, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Adjusted Debt") + ggtitle("Top 10 Companies by Adjusted Debt") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+
+```
+</div>
+
+</div>
+
+
+### Debt Value
+<div style='display:flex; flex-direction:column; justify-content:space-evenly; align-items:center;'>
+<div>
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = reported_bv_debt, n=10) %>% 
+    ggplot(aes(x = reported_bv_debt , y = reorder(company_name, reported_bv_debt), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Reported Book Value of Debt: </b>", reported_bv_debt, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Book Value of Debt") + ggtitle("Top 10 Companies by Reported Book Value of Debt") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+<div>
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = estimated_mv_debt, n=10) %>% 
+    ggplot(aes(x = estimated_mv_debt , y = reorder(company_name, estimated_mv_debt), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Estimated Market Value of Debt: </b>", estimated_mv_debt, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Market Value of Debt") + ggtitle("Top 10 Companies by Estimated Market Value of Debt") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+</div>
+
+### Cost of Capital
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_cost_capital, n=10) %>% 
+    ggplot(aes(x = actual_cost_capital , y = reorder(company_name, actual_cost_capital), xmin=optimal_cost_capital, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Cost of Capital: </b>", actual_cost_capital, "<br>", "<b>Optimal Cost of Capital: </b>", optimal_cost_capital,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_cost_capital, xmax=optimal_cost_capital, xmin=optimal_cost_capital, size = 0.5))  + 
+    xlab("Cost of Capital") + ggtitle("Top 10 Companies by Actual Cost of Capital") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+### Cost of Equity
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_cost_equity, n=10) %>% 
+    ggplot(aes(x = actual_cost_equity , y = reorder(company_name, actual_cost_equity), xmin=optimal_cost_equity, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Cost of Equity: </b>", actual_cost_equity, "<br>", "<b>Optimal Cost of Equity: </b>", optimal_cost_equity,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_cost_equity, xmax=optimal_cost_equity, xmin=optimal_cost_equity, size = 0.5))  + 
+    xlab("Cost of Equity") + ggtitle("Top 10 Companies by Actual Cost of Equity") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+```
+
+### Cost of Debt
+<div style='display:flex; flex-direction:column; justify-content:space-evenly; align-items:center;'>
+<div>
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_cost_debt_after_tax, n=10, with_ties = FALSE) %>% 
+    ggplot(aes(x = actual_cost_debt_after_tax , y = reorder(company_name, actual_cost_debt_after_tax), xmin=optimal_cost_debt_after_tax, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Cost of Debt after Tax: </b>", actual_cost_debt_after_tax, "<br>", "<b>Optimal Cost of Debt after Tax: </b>", optimal_cost_debt_after_tax,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_cost_debt_after_tax, xmax=optimal_cost_debt_after_tax, xmin=optimal_cost_debt_after_tax, size = 0.5))  + 
+    xlab("Cost of Debt after Tax") + ggtitle("Top 10 Companies by Actual Cost of Debt after Tax") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+<div>
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = estimated_cost_debt_pre_tax, n=10, with_ties = FALSE) %>% 
+    ggplot(aes(x = estimated_cost_debt_pre_tax , y = reorder(company_name, estimated_cost_debt_pre_tax), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Estimated Cost of Debt Pre-Tax: </b>", estimated_cost_debt_pre_tax, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Cost of Debt Pre-Tax") + ggtitle("Top 10 Companies by Estimated Cost of Debt Pre-Tax") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+</div>
+
+### Expenses
+<div style='display:flex; flex-direction:column; justify-content:space-evenly; align-items:center;'>
+<div>
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = reported_capital_spending, n=10) %>% 
+    ggplot(aes(x = reported_capital_spending , y = reorder(company_name, reported_capital_spending), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Reported Capital Spending: </b>", reported_capital_spending, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Capital Spending") + ggtitle("Top 10 Companies by Reported Capital Spending") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+<div>
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = reported_interest_expense, n=10) %>% 
+    ggplot(aes(x = reported_interest_expense , y = reorder(company_name, reported_interest_expense), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Reported Interest Expenses: </b>", reported_interest_expense, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Interest Expenses") + ggtitle("Top 10 Companies by Reported Interest Expenses") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+</div>
+
+</div>
+
+### Cash
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = reported_cash, n=10) %>% 
+    ggplot(aes(x = reported_cash , y = reorder(company_name, reported_cash), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Reported Cash: </b>", reported_cash, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Cash") + ggtitle("Top 10 Companies by Reported Cash") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+### EBITDA
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = adjusted_ebitda, n=10) %>% 
+    ggplot(aes(x = adjusted_ebitda , y = reorder(company_name, adjusted_ebitda), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Adjusted EBITDA: </b>", adjusted_ebitda, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Adjusted EBITDA") + ggtitle("Top 10 Companies by Adjusted EBITDA") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+### Depreciation
+```{r}
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = adjusted_depreciation, n=10) %>% 
+    ggplot(aes(x = adjusted_depreciation , y = reorder(company_name, adjusted_depreciation), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Adjusted Depreciation: </b>", adjusted_depreciation, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Adjusted Depreciation") + ggtitle("Top 10 Companies by Adjusted Depreciation") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+### Coverage Ratio
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = coverage_ratio, n=10) %>% 
+    ggplot(aes(x = coverage_ratio , y = reorder(company_name, coverage_ratio), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Coverage Ratio: </b>", coverage_ratio, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Coverage Ratio") + ggtitle("Top 10 Companies by Coverage Ratio") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+### Beta
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = actual_beta, n=10) %>% 
+    ggplot(aes(x = actual_beta , y = reorder(company_name, actual_beta), xmin=optimal_beta, 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Actual Beta: </b>", actual_beta, "<br>", "<b>Optimal Beta: </b>", optimal_beta,"<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    geom_errorbar(aes(xintercept = optimal_beta, xmax=optimal_beta, xmin=optimal_beta, size = 0.5))  + 
+    xlab("Beta") + ggtitle("Top 10 Companies by Actual Beta") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+
+### Spread Optimal 
+```{r}
+
+renderPlotly({
+  p <- FilteredData() %>% slice_max(order_by = spread_optimal, n=10) %>% 
+    ggplot(aes(x = spread_optimal , y = reorder(company_name, spread_optimal), 
+               text = paste0("<b>Company Name: </b>", company_name,"<br>", "<b>Spread Optimal: </b>", spread_optimal, "<br>"))) + 
+    geom_bar(stat = "identity", fill = "#F3CFC6") + 
+    xlab("Spread Optimal") + ggtitle("Top 10 Companies by Spread Optimal") + theme_hc() +
+    theme(axis.title.y = element_blank())
+  p <- ggplotly(p , tooltip = "text")
+  p
+  
+})
+
+```
+
+
+
+# Excess Returns
+
+Column {.sidebar data-width=330}
+-----------------------------------------------------------------------
+
+### Filters
+Use the dropdown bars to input filter criteria. Search result will be displayed in the table. 
+
+```{r}
+# industry tab also uses this vector
+selection_var <- names(singapore_earnings_debt %>% select_if(is.numeric)) %>% str_replace_all("_", " ") %>% str_to_title() %>% trimws()
+
+selection_lib <- data.frame(r_name=names(singapore_earnings_debt %>% select_if(is.numeric)), proper_name=selection_var)
+
+pickerInput(inputId = 'var_co', 
+            label = 'Select Performance Indicator:', 
+            choices = selection_var,
+            selected = "Dividend Yield", 
+            options = list(`actions-box` = TRUE,style="color: white"))
+
+pickerInput(inputId = 'topN', 
+            label = 'Select top number of companies:', 
+            choices = c(10, 25, 50),
+            selected = 10, 
+            options = list(`actions-box` = TRUE,style="color: white"))
+
+industry_list <- sort(unique(singapore_earnings_debt$industry_group))
+
+pickerInput(inputId = 'industry_ind', 
+            label = 'Select Industry:', 
+            choices = industry_list, 
+            selected = industry_list,
+            options = list(`actions-box` = TRUE,style="color: white"), multiple = TRUE)
+
+```
+Row 
+-----------------------------------------------------------------------
+### Top Companies
+```{r}
+# yvar <- selection_lib[selection_lib[, "proper_name"] == "Historical Growth Revenue Last 5 Years", "r_name"]
+# 
+# test <- singapore_earnings_debt %>%
+#     arrange(-!!sym(yvar)) %>%
+#     slice(1:25)
+# test <- industry_list[1]
+
+topCompanies <- reactive({
+  
+  yvar <- selection_lib[selection_lib[, "proper_name"] == input$var_co, "r_name"]
+  
+  singapore_earnings_debt %>% filter(industry_group %in% input$industry_ind) %>% #input$industry
+    arrange(-!!sym(yvar)) %>%
+    slice(1:input$topN)
+  
+})
+
+renderHighchart({
+  yvar <- selection_lib[selection_lib[, "proper_name"] == input$var_co, "r_name"]
+  
+  topCompanies() %>% hchart("bar", hcaes(x="company_name" , y=!!sym(yvar))) %>%
+    hc_colorAxis(stops = color_stops(colors = viridis::magma(20)))%>%
+    hc_tooltip(pointFormat = "<b>{point.name}</b>:<br>
+                             ROIC: {point.roic:,.2f} <br>
+                             Dividends: {point.dividends:,.0f} <br>
+                             Dividend yield: {point.y:,.2f}<br>
+                             Payout_ratio: {point.payout_ratio:,.2f}<br>
+                             Buybacks: {point.buybacks:,.2f}<br>
+                             ",
+             headerFormat = "") %>% 
+    hc_title(text=paste0("Top ", as.character(input$topN) , " Companies by ", str_to_title(gsub("_"," ",as.character(yvar))))) %>%
+    hc_xAxis(labels = list(step = 1), scrollbar=list(enabled=TRUE), max = 10, title = list(text = "Company Name")) %>% 
+    hc_yAxis(title = list(text = str_to_title(gsub("_"," ",as.character(yvar))))) #%>% # display all the names in the x axis, which is y-axis in this case 
+    # hc_size(height = 500)
+})
+
+# use hcaes_string() or !!sym() to turn strings into symbols, in ggplot it is aes_string
+```
+
+Row {data-height=70}
+-----------------------------------------------------------------------
+
+```{r}
+
+pickerInput(inputId ='er_dt_selected_cols', 
+            label = 'Performance Indicators to display in table:', 
+            choices = selection_var,
+            selected = c("Historical Growth Revenue Last 5 Years"),
+            options = list(`actions-box` = TRUE,style="color: white", "dropup-auto"=FALSE), 
+            multiple = TRUE)
+
+```
+
+Row 
+-----------------------------------------------------------------------
+### More details on companies displayed in chart above
+```{r}
+
+topCompanies_DT <- reactive({
+  
+  req(input$er_dt_selected_cols)
+  
+  colselected <- selection_lib %>% filter(proper_name %in% input$er_dt_selected_cols) 
+  displayDT_co <- topCompanies() %>% select(company_name, industry_group, colselected$r_name)
+  proper_names_ec <- names(displayDT_co) %>% str_replace_all("_", " ") %>% str_to_title()
+  names(displayDT_co) <- proper_names_ec
+  
+  displayDT_co
+  
+})
+
+renderDataTable({
+  # data table customisation 1
+  my.options <- list(initComplete = JS(
+        "function(settings, json) {",
+        "$(this.api().table().header()).css({'background-color': '#CB9C9C', 
+                                             'color': 'white',
+                                             'font-size': '100%'});",
+        "}"),
+        pageLength = 100,
+        paging = F,
+        info = T, 
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel')
+        )
+  DT::datatable(topCompanies_DT(), extensions = 'Buttons', options = my.options)
+})
+  
+```
+
+# Industries
+```{r clean data, include=FALSE}
+# change col name from company_name to no_of_companies
+names(singapore_industries)[1] <- "no_of_companies"
+singapore_industries$no_of_companies <- as.numeric(singapore_industries$no_of_companies)
+# names(singapore_industries)
+
+# reorder columns for the industry group to be the first column
+singapore_industries <- singapore_industries %>% select(industry_group, no_of_companies, historical_growth_revenue_last_5_years:ebit_net_interest_expenses)
+```
+
+Column {.sidebar data-width=330}
+-----------------------------------------------------------------------
+
+### Filters
+Use the dropdown bars to input filter criteria. Search result will be displayed in the table. 
+
+```{r}
+selection_var_ind <- singapore_earnings_debt %>% select_if(is.numeric)
+
+pickerInput(inputId = 'var_ind', 
+    label = 'Select Performance Indicator:', 
+    choices = selection_var,
+    selected = "Dividend Yield",
+    options = list(`actions-box` = TRUE,style="color: white"))
+
+pickerInput(inputId = 'topN_ind', 
+    label = 'Select top number of companies:', 
+    choices = c(10, 25, 50),
+    selected = 10,
+    options = list(`actions-box` = TRUE,style="color: white"))
+```
+
+Row 
+-----------------------------------------------------------------------
+### Top industries
+```{r}
+# test <- singapore_industries %>% arrange(-dividends) %>% slice_max(order_by = dividends, n=20)
+
+topIndustries <- reactive({
+  yvar <- selection_lib[selection_lib[, "proper_name"] == input$var_ind, "r_name"]
+  
+  singapore_industries %>% arrange(-!!sym(yvar)) %>% slice(1:input$topN_ind)
+})
+
+
+renderHighchart({
+  yvar <- selection_lib[selection_lib[, "proper_name"] == input$var_ind, "r_name"]
+  
+  topIndustries() %>% 
+    hchart("bar", hcaes(x="industry_group", y= !!sym(yvar))) %>%
+    hc_colorAxis(stops = color_stops(colors = viridis::magma(20)))%>%
+    hc_tooltip(pointFormat = "<b>{point.name}</b>:<br>
+                             ROIC: {point.roic:,.2f} <br>
+                             Dividends: {point.dividends:,.0f} <br>
+                             Dividend yield: {point.y:,.2f}<br>
+                             Payout_ratio: {point.payout_ratio:,.2f}<br>
+                             Buybacks: {point.buybacks:,.2f}<br>
+                             ",
+             headerFormat = "") %>% 
+    hc_title(text=paste0("Top ", as.character(input$topN_ind) , " Industries by ", str_to_title(gsub("_"," ",as.character(yvar))))) %>%
+    hc_xAxis(labels = list(step = 1), scrollbar=list(enabled=TRUE), max = 10, title = list(text = "Industry")) %>% 
+    hc_yAxis(title = list(text = str_to_title(gsub("_"," ",as.character(yvar)))))#%>% # display all the names in the x axis, which is y-axis in this case 
+    # hc_size(height = 500)
+}) 
+```
+
+Row {data-height=70}
+-----------------------------------------------------------------------
+
+```{r}
+
+pickerInput(inputId ='ind_dt_selected_cols', 
+            label = 'Performance Indicators to display in table:', 
+            choices = selection_var,
+            selected = c("Historical Growth Revenue Last 5 Years"),
+            options = list(`actions-box` = TRUE,style="color: white", "dropup-auto"=FALSE), 
+            multiple = TRUE)
+
+```
+
+Row 
+-----------------------------------------------------------------------
+### More details on companies displayed in chart above
+
+```{r}
+
+topIndustries_DT <- reactive({
+  
+  req(input$ind_dt_selected_cols)
+  
+  colselected_ind <- selection_lib %>% filter(proper_name %in% input$ind_dt_selected_cols) 
+  displayDT_ind <- topIndustries() %>% select(industry_group, colselected_ind$r_name)
+  proper_names_ec <- names(displayDT_ind) %>% str_replace_all("_", " ") %>% str_to_title()
+  names(displayDT_ind) <- proper_names_ec
+  
+  displayDT_ind
+  
+})
+ 
+
+renderDataTable({
+  # data table customisation 1
+  my.options <- list(initComplete = JS(
+        "function(settings, json) {",
+        "$(this.api().table().header()).css({'background-color': '#CB9C9C', 
+                                             'color': 'white',
+                                             'font-size': '100%'});",
+        "}"),
+        pageLength = 100,
+        paging = F,
+        info = T, 
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel')
+        )
+  
+  
+  DT::datatable(topIndustries_DT(), extensions = 'Buttons', options = my.options)
+})
+```
+
+# Risk Premium
+
+-----------------------------------------------------------------------
+
+```{r}
+#last update filter
+output$apr_01_2020$ds_df$last_update<- as.Date('2020-04-01')
+output$dec_31_2019$ds_df$last_update<- as.Date('2019-12-31')
+output$jan_01_2021$ds_df$last_update<- as.Date('2021-01-01')
+output$jul_01_2020$ds_df$last_update<- as.Date('2020-07-01')
+output$jul_01_2021$ds_df$last_update<- as.Date('2021-07-01')
+
+risk_premium_singapore <- output$apr_01_2020$ds_df %>% rbind(output$dec_31_2019$ds_df, output$jan_01_2021$ds_df, output$jul_01_2020$ds_df,output$jul_01_2021$ds_df) %>% filter(country=='Singapore')
+
+selectInput('last_updated', 'Last Updated:', choices = sort(risk_premium_singapore$last_update))
+
+```
+
+Row
+-----------------------------------------------------------------------
+### S&P Ratings {.value-box}
+```{r}
+renderValueBox({
+sp_rating <- risk_premium_singapore %>% filter(last_update == input$last_updated) %>% select(sp_rating)
+
+valueBox(value = sp_rating, caption = "S&P Rating", color='#D8A6B4')
+
+})
+```
+
+### Moody's Ratings {.value-box}
+```{r}
+renderValueBox({
+
+moodys_rating <- risk_premium_singapore %>% filter(last_update  == input$last_updated) %>% select(moodys_rating)
+
+
+valueBox(value = moodys_rating, caption = "Moody's Rating", color='#D8A6B4')
+})
+```
+
+Row
+-----------------------------------------------------------------------
+### Risk Premium
+```{r}
+timeseries_df <- risk_premium_singapore %>% select(last_update, rating_erp, mat_erp, rel_vol) 
+qxts <- as.xts(timeseries_df[,-1], order.by=timeseries_df$last_update, dateFormat="POSIXct")
+dygraph(qxts) %>% dySeries("mat_erp", axis = 'y2') %>% dySeries("rating_erp", axis = 'y2') %>% 
+  dyAxis("y", label = "rel_vol") %>% dyAxis("y2", label = "mat_erp/ rating_erp") %>%
+  dyOptions(drawPoints = TRUE, pointSize = 2)
+```
+
+
+# Company Comparison
+
+Sidebar {.sidebar data-width=330}
+-----------------------------------------------------------------------
+### Filters
+Select the companies to compare and the financial performance indicator of interest using the dropdowns.
+
+```{r}
+company_comparison_table <- singapore_cost_capital %>% inner_join(singapore_earnings_debt, by="company_name")
+
+# create proper names and library dataframe
+selection_var_compare <- names(company_comparison_table %>% select_if(is.numeric)) %>% str_replace_all("_", " ") %>% str_to_title() %>% trimws()
+
+selection_lib_compare <- data.frame(r_name=names(company_comparison_table %>% select_if(is.numeric)), proper_name=selection_var_compare)
+
+selectizeInput('company_selection' , 
+               'Select Companies:' , 
+               choices=sort(unique(company_comparison_table$company_name)),
+               selected = NULL, 
+               multiple = TRUE)
+
+pickerInput('indicator_selection', 
+            'Select Performance Indicator:', 
+            choices = selection_var_compare, 
+            options = list(`actions-box` = TRUE, style="color: white"))
+```
+
+## Column
+-----------------------------------------------------------------------
+###  
+```{r}
+SelectedCompanies <- reactive({
+  
+  companies <- input$company_selection
+  yvar <- selection_lib_compare[selection_lib_compare[, "proper_name"] == input$indicator_selection, "r_name"]
+  req(companies,yvar)
+  
+  company_comparison_table %>% filter(company_name %in% input$company_selection) %>% arrange(-!!sym(yvar))
+})
+
+renderHighchart({
+  yvar <- selection_lib_compare[selection_lib_compare[, "proper_name"] == input$indicator_selection, "r_name"]
+  
+  SelectedCompanies() %>% 
+    hchart("bar", hcaes(x="company_name", y= !!sym(yvar))) %>%
+    hc_colorAxis(stops = color_stops(colors = viridis::magma(20)))%>%
+    hc_tooltip(pointFormat = "<b>{point.name}</b>:<br>
+                             ROIC: {point.roic:,.2f} <br>
+                             Dividends: {point.dividends:,.0f} <br>
+                             Dividend yield: {point.y:,.2f}<br>
+                             Payout_ratio: {point.payout_ratio:,.2f}<br>
+                             Buybacks: {point.buybacks:,.2f}<br>
+                             ",
+             headerFormat = "") %>% 
+    hc_title(text=paste0(str_to_title(gsub("_"," ",as.character(yvar))), " Comparison")) %>% 
+    hc_xAxis(title = list(text = "Company Name")) %>% 
+    hc_yAxis(title = list(text = str_to_title(gsub("_"," ",as.character(yvar)))))
+}) 
+```
+
+## Column
+-----------------------------------------------------------------------
+### More details on Selected Companies
+```{r}
+# company_comparison_table$company_name
+
+# test <- company_comparison_table %>% filter(company_name %in% c("SIIC Environment Holdings Ltd. (SGX:BHK)")) %>% select(-industry_group.y) %>% arrange(-net_debt_ebitda) %>% t() %>% as.data.frame()
+# company_names <- test %>% slice(1) %>% unlist(use.names = F)
+# test <- set_names(test, company_names)
+# test_n <- test %>% slice(3:n())
+# 
+# rownames(test_n) <- rownames(test_n)  %>% str_replace_all("_", " ") %>% str_to_title()
+# rownames(test_n)[1] <- "Industry Group"
+
+renderDataTable({
+  my.options <- list(initComplete = JS(
+        "function(settings, json) {",
+        "$(this.api().table().header()).css({'background-color': '#CB9C9C', 
+                                             'color': 'white',
+                                             'font-size': '100%'});",
+        "}"),
+        pageLength = 100,
+        paging = F,
+        info = T, 
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel')
+        )
+  
+  yvar <- selection_lib_compare[selection_lib_compare[, "proper_name"] == input$indicator_selection, "r_name"]
+  
+  req(input$company_selection,input$indicator_selection)
+  
+  # create datatable
+  company_data <- company_comparison_table %>% filter(company_name %in% input$company_selection) %>% select(-industry_group.y) %>% arrange(-!!sym(yvar)) %>% t() %>% as.data.frame() 
+  company_names <- company_data %>% slice(1) %>% unlist(use.names = F)
+  company_data <- set_names(company_data, company_names)
+  SelectedCompaniesTable <- company_data %>% slice(3:n())
+  
+  # change names
+  rownames(SelectedCompaniesTable) <- rownames(SelectedCompaniesTable)  %>% str_replace_all("_", " ") %>% str_to_title()
+  rownames(SelectedCompaniesTable)[1] <- "Industry Group"
+
+  DT::datatable(SelectedCompaniesTable, extensions = 'Buttons', options = my.options)
+})
+
+
+```
+
