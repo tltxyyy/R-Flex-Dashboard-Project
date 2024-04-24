@@ -15,7 +15,7 @@ There are six pages in the dashboard:
 5. Risk Premium
 6. Company Comparison**
 
-** The pages which are mainly created my me.
+** The pages which are created my me. I have also helped out in the ideation and implementation of the rest of the pages.
 
 ## Diving into each Page
 
@@ -41,11 +41,18 @@ Users can easily filter for top companies based on the performance indicator whi
    <img width="1463" alt="image" src="https://github.com/tltxyyy/Stocks-Dashboard/assets/69724535/6bd0c62f-e0f8-460e-94d6-119d80b891e4">
 
 ### 5. Industries
+Investor sentiment towards a particular industry can drive demand and stock prices for companies in that industry. Diversification across different industries helps mitigate industry-specific risks in a portfolio. Users looking to "put eggs in different baskets" may find this page useful.
+
+Users can easily filter for top companies based on the performance indicator which are is important to them and select the number of top companies they want to see.
    <img width="1462" alt="image" src="https://github.com/tltxyyy/Stocks-Dashboard/assets/69724535/2f749f48-3d46-4942-ad4b-ea19a86ed569">
    
 ### 6. Risk Premium
+Risk premium is the additional return an investor expects to receive for taking on higher risk investments compared to risk-free assets like government bonds. The chart serves to complement the previous three pages in helping investors determine if the potential return historically justifies the risk taken for a particular investment.
    <img width="1460" alt="image" src="https://github.com/tltxyyy/Stocks-Dashboard/assets/69724535/741184d6-eb37-461a-9945-da152a300e29">
 
 ### 7. Company Comparison
+For users who might already or not be investing this page would serve useful to compare how each stock fare against another. It narrows down the stocks to those which the investor is keen to or already purchased and compare them by the various performance indicators to make an informed decision or compare their performance.
+
+Besides the chart which provides a visual representation, the table below provides a side by side comprehensive detail of the selected stocks for ease of comparison.
    <img width="1452" alt="image" src="https://github.com/tltxyyy/Stocks-Dashboard/assets/69724535/94614b71-2dcc-4292-8075-0a9f30b5dd38">
 
