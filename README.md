@@ -18,9 +18,7 @@ There are six pages in the dashboard:
 ** The pages which are created my me. I have also helped out in the ideation and implementation of the rest of the pages.
 
 ## Diving into each Page
-
-The next three pages shows the top companies based on different performance indicators.
-The last page, Company Comparison, narrows down the stocks to those whic the investor is keen to purchase and compare them by the various performance indicators to make an informed decision.
+The creation of charts comprises the use of the ggplot2 and highcharter library. Highcharter being one of my favourite visualisation libraries as it creates highly interactive, web-based visualizations.
 
 ### 1.Stock Screener
 The first page serve as a starting point for investors who have little clue what stocks they want to invest in. The user can easily filter for stocks based on the factor which are most important to them and browse other of the stocks' relevant information.
@@ -54,5 +52,6 @@ Risk premium is the additional return an investor expects to receive for taking 
 For users who might already or not be investing this page would serve useful to compare how each stock fare against another. It narrows down the stocks to those which the investor is keen to or already purchased and compare them by the various performance indicators to make an informed decision or compare their performance.
 
 Besides the chart which provides a visual representation, the table below provides a side by side comprehensive detail of the selected stocks for ease of comparison.
-   <img width="1452" alt="image" src="https://github.com/tltxyyy/Stocks-Dashboard/assets/69724535/94614b71-2dcc-4292-8075-0a9f30b5dd38">
+   <img width="1462" alt="image" src="https://github.com/tltxyyy/Stocks-Dashboard/assets/69724535/f9a1d1e4-9360-473a-931e-8d01c6590411">
+
 
